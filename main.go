@@ -34,7 +34,7 @@ func main() {
 	mux.HandleFunc("POST /admin/reset", loggingMiddleware(apiCfg.resetHandler))
 	mux.HandleFunc("POST /api/validate_chirp", loggingMiddleware(apiCfg.validateChirpHandler))
 	mux.HandleFunc("POST /api/users", loggingMiddleware(apiCfg.createUserHandler))
-	mux.HandleFunc("POST /api/reset", loggingMiddleware(apiCfg.resetHandler))
+	mux.HandleFunc("POST /api/chirps", loggingMiddleware(apiCfg.createChirpHandler))
 
 	server := http.Server{
 		Addr:    ":8080",
