@@ -30,6 +30,7 @@ func respondWithError(w http.ResponseWriter, req *http.Request, err string) {
 	type errorResponse struct {
 		Error string `json:"error"`
 	}
+	log.Println(err)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 	data, _ := json.Marshal(errorResponse{Error: err})

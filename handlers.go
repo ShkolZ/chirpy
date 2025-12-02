@@ -18,13 +18,6 @@ type apiConfig struct {
 	Queries        *database.Queries
 }
 
-func (cfg *apiConfig) metricsIncMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, req)
-	})
-}
-
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(200)
@@ -73,7 +66,7 @@ func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, req *http.Requ
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&params); err != nil {
 		errF := fmt.Sprintf("Error decoding parameters: %v\n", err)
-		log.Println(errF)
+
 		respondWithError(w, req, errF)
 		return
 	}
@@ -124,7 +117,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 	})
 	if err != nil {
 		errF := fmt.Sprintf("Error while creating user: %v\n", err)
-		log.Println(errF)
+
 		respondWithError(w, req, errF)
 		return
 	}
@@ -149,7 +142,7 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&params); err != nil {
 		errF := fmt.Sprintf("Some problem decoding chirp params: %v\n", err)
-		log.Println(errF)
+
 		respondWithError(w, req, errF)
 		return
 	}
@@ -163,7 +156,6 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 	})
 	if err != nil {
 		errF := fmt.Sprintf("Some problem creating chirp: %v\n", err)
-		log.Println(errF)
 		respondWithError(w, req, errF)
 		return
 	}
@@ -188,4 +180,48 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 	w.WriteHeader(201)
 	w.Write(data)
 
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request) {
+	chirps, err := cfg.Queries.GetChirps(req.Context())
+	if err != nil {
+		errF := fmt.Sprintf("Some error retrieving chirps: %v", err)
+		respondWithError(w, req, errF)
+		return
+	}
+
+	data, err := json.Marshal(chirps)
+	if err != nil {
+		errF := fmt.Sprintf("Some error marshaling json: %v", err)
+		respondWithError(w, req, errF)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(data)
+}
+
+func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil {
+		errF := fmt.Sprintf("Some problem with parsing id: %v", err)
+		respondWithError(w, req, errF)
+		return
+	}
+	chirp, err := cfg.Queries.GetChirpById(req.Context(), id)
+	if err != nil {
+		errF := fmt.Sprintf("Some problem with retreiving chirp: %v", err)
+		respondWithError(w, req, errF)
+		return
+	}
+
+	data, err := json.Marshal(chirp)
+	if err != nil {
+		errF := fmt.Sprintf("Some problem with marshaling json: %v", err)
+		respondWithError(w, req, errF)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(data)
 }

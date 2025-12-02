@@ -27,14 +27,18 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		Queries:        dbQueries,
 	}
-
+	//GET Requests
 	mux.Handle("/app/", apiCfg.metricsIncMiddleware(http.StripPrefix("/app/", fileServeHandler)))
-	mux.HandleFunc("GET /api/healthz", loggingMiddleware(apiCfg.healthzHandler))
-	mux.HandleFunc("GET /admin/metrics", loggingMiddleware(apiCfg.metricsHandler))
-	mux.HandleFunc("POST /admin/reset", loggingMiddleware(apiCfg.resetHandler))
-	mux.HandleFunc("POST /api/validate_chirp", loggingMiddleware(apiCfg.validateChirpHandler))
-	mux.HandleFunc("POST /api/users", loggingMiddleware(apiCfg.createUserHandler))
-	mux.HandleFunc("POST /api/chirps", loggingMiddleware(apiCfg.createChirpHandler))
+	mux.HandleFunc("GET /api/healthz", apiCfg.loggingMiddleware(apiCfg.healthzHandler))
+	mux.HandleFunc("GET /admin/metrics", apiCfg.loggingMiddleware(apiCfg.metricsHandler))
+	mux.HandleFunc("GET /api/chirps", apiCfg.loggingMiddleware(apiCfg.getChirpsHandler))
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.loggingMiddleware(apiCfg.getChirpHandler))
+
+	//POST Requests
+	mux.HandleFunc("POST /admin/reset", apiCfg.loggingMiddleware(apiCfg.resetHandler))
+	mux.HandleFunc("POST /api/validate_chirp", apiCfg.loggingMiddleware(apiCfg.validateChirpHandler))
+	mux.HandleFunc("POST /api/users", apiCfg.loggingMiddleware(apiCfg.createUserHandler))
+	mux.HandleFunc("POST /api/chirps", apiCfg.loggingMiddleware(apiCfg.createChirpHandler))
 
 	server := http.Server{
 		Addr:    ":8080",
