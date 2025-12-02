@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ShkolZ/chirpy/internal/auth"
 	"github.com/ShkolZ/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -65,9 +67,11 @@ func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, req *http.Requ
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&params); err != nil {
-		errF := fmt.Sprintf("Error decoding parameters: %v\n", err)
-
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error decoding chirp",
+			Code:  400,
+		})
 		return
 	}
 	count := 0
@@ -86,9 +90,11 @@ func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, req *http.Requ
 		w.Write(data)
 
 	} else {
-		myErr := "The Chirp is too long"
-		log.Println(myErr)
-		respondWithError(w, req, myErr)
+		respondWithError(w, req, &errorResponse{
+			Error: errors.New("Chirp is too long"),
+			Msg:   "Chirp is too long",
+			Code:  400,
+		})
 		return
 	}
 
@@ -96,38 +102,43 @@ func (cfg *apiConfig) validateChirpHandler(w http.ResponseWriter, req *http.Requ
 
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
 	type reqParams struct {
-		Email string `json:"email"`
-	}
-	type userParams struct {
-		Id        uuid.UUID `json:"id"`
-		Email     string    `json:"email"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
 	decoder.Decode(&params)
 
+	hashedPass, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error hashing password",
+			Code:  500,
+		})
+		return
+	}
+
 	user, err := cfg.Queries.CreateUser(req.Context(), database.CreateUserParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Email:     params.Email,
+		Password:  hashedPass,
 	})
 	if err != nil {
-		errF := fmt.Sprintf("Error while creating user: %v\n", err)
-
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error creating user",
+			Code:  500,
+		})
 		return
 	}
 	log.Println("User was Created")
-	data, _ := json.Marshal(userParams{
-		Id:        user.ID,
-		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-	})
+
+	user.Password = params.Password
+	data, _ := json.Marshal(user)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
 	w.Write(data)
@@ -141,9 +152,11 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
 	if err := decoder.Decode(&params); err != nil {
-		errF := fmt.Sprintf("Some problem decoding chirp params: %v\n", err)
-
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error decoding",
+			Code:  400,
+		})
 		return
 	}
 
@@ -155,26 +168,15 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 		UserID:    params.UserId,
 	})
 	if err != nil {
-		errF := fmt.Sprintf("Some problem creating chirp: %v\n", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error creating chirp",
+			Code:  500,
+		})
 		return
 	}
 
-	type chirpParams struct {
-		Id        uuid.UUID `json:"id"`
-		Body      string    `json:"body"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		UserId    uuid.UUID `json:"user_id"`
-	}
-
-	data, _ := json.Marshal(chirpParams{
-		Id:        chirp.ID,
-		Body:      chirp.Body,
-		CreatedAt: chirp.CreatedAt,
-		UpdatedAt: chirp.UpdatedAt,
-		UserId:    chirp.UserID,
-	})
+	data, _ := json.Marshal(chirp)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
@@ -185,15 +187,21 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, req *http.Reques
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request) {
 	chirps, err := cfg.Queries.GetChirps(req.Context())
 	if err != nil {
-		errF := fmt.Sprintf("Some error retrieving chirps: %v", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Weren't able to get chirps",
+			Code:  500,
+		})
 		return
 	}
 
 	data, err := json.Marshal(chirps)
 	if err != nil {
-		errF := fmt.Sprintf("Some error marshaling json: %v", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error marshaling",
+			Code:  500,
+		})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -204,24 +212,87 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request)
 func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(req.PathValue("chirpID"))
 	if err != nil {
-		errF := fmt.Sprintf("Some problem with parsing id: %v", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error parsing",
+			Code:  400,
+		})
 		return
 	}
 	chirp, err := cfg.Queries.GetChirpById(req.Context(), id)
 	if err != nil {
-		errF := fmt.Sprintf("Some problem with retreiving chirp: %v", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error getting chirp by id",
+			Code:  400,
+		})
 		return
 	}
 
 	data, err := json.Marshal(chirp)
 	if err != nil {
-		errF := fmt.Sprintf("Some problem with marshaling json: %v", err)
-		respondWithError(w, req, errF)
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error marshalling",
+			Code:  500,
+		})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 	w.Write(data)
+}
+
+func (cfg *apiConfig) loginHandler(w http.ResponseWriter, req *http.Request) {
+	type reqParams struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	params := reqParams{}
+
+	decoder := json.NewDecoder(req.Body)
+	if err := decoder.Decode(&params); err != nil {
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Some error decoding",
+			Code:  400,
+		})
+		return
+	}
+
+	user, err := cfg.Queries.GetUserByEmail(req.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Wrong password or email",
+			Code:  401,
+		})
+		return
+	}
+
+	hash := user.Password
+
+	isPassword, err := auth.CheckPasswordHash(params.Password, hash)
+	if err != nil {
+		respondWithError(w, req, &errorResponse{
+			Error: err,
+			Msg:   "Problem with comparing hashes",
+			Code:  500,
+		})
+	}
+	user.Password = ""
+	if isPassword {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		data, _ := json.Marshal(user)
+		w.Write(data)
+	} else {
+		respondWithError(w, req, &errorResponse{
+			Error: errors.New("Wrong password"),
+			Msg:   "Wrong password or email",
+			Code:  401,
+		})
+	}
+
 }

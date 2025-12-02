@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+type errorResponse struct {
+	Error error
+	Msg   string
+	Code  int
+}
+
 func cleanInput(i string) string {
 	words := strings.Split(i, " ")
 	curseWords := []string{"kerfuffle", "sharbert", "fornax"}
@@ -26,13 +32,16 @@ func cleanInput(i string) string {
 	return cleanString
 }
 
-func respondWithError(w http.ResponseWriter, req *http.Request, err string) {
-	type errorResponse struct {
-		Error string `json:"error"`
+func respondWithError(w http.ResponseWriter, req *http.Request, err *errorResponse) {
+	type res struct {
+		Msg string `json:"msg"`
 	}
-	log.Println(err)
+
+	log.Printf("%v: %v", err.Msg, err.Error)
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-	data, _ := json.Marshal(errorResponse{Error: err})
+	w.WriteHeader(err.Code)
+	data, _ := json.Marshal(resp{
+		Msg: err.Msg,
+	})
 	w.Write(data)
 }
