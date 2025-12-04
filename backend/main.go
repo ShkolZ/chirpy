@@ -16,6 +16,7 @@ import (
 func main() {
 	godotenv.Load("./../.env")
 	dbURL := os.Getenv("DB_URL")
+	secretKey := os.Getenv("SECRET_KEY")
 	db, err := sql.Open("postgres", dbURL)
 	dbQueries := database.New(db)
 
@@ -27,6 +28,7 @@ func main() {
 	apiCfg := handlers.ApiConfig{
 		FileserverHits: atomic.Int32{},
 		Queries:        dbQueries,
+		SecretKey:      secretKey,
 	}
 
 	//GET Requests
@@ -42,6 +44,8 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.LoggingMiddleware(apiCfg.CreateUserHandler))
 	mux.HandleFunc("POST /api/chirps", apiCfg.LoggingMiddleware(apiCfg.CreateChirpHandler))
 	mux.HandleFunc("POST /api/login", apiCfg.LoggingMiddleware(apiCfg.LoginHandler))
+
+	log.Println("Server is starting...")
 
 	server := http.Server{
 		Addr:    ":8080",

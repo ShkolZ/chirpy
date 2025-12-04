@@ -21,6 +21,7 @@ import (
 type ApiConfig struct {
 	FileserverHits atomic.Int32
 	Queries        *database.Queries
+	SecretKey      string
 }
 
 func (cfg *ApiConfig) MetricsHandler(w http.ResponseWriter, req *http.Request) {
@@ -111,7 +112,15 @@ func (cfg *ApiConfig) CreateUserHandler(w http.ResponseWriter, req *http.Request
 
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
-	decoder.Decode(&params)
+	err := decoder.Decode(&params)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Error with decoding",
+			Code:  500,
+		})
+		return
+	}
 
 	hashedPass, err := auth.HashPassword(params.Password)
 	if err != nil {
@@ -149,8 +158,7 @@ func (cfg *ApiConfig) CreateUserHandler(w http.ResponseWriter, req *http.Request
 
 func (cfg *ApiConfig) CreateChirpHandler(w http.ResponseWriter, req *http.Request) {
 	type reqParams struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
@@ -162,13 +170,31 @@ func (cfg *ApiConfig) CreateChirpHandler(w http.ResponseWriter, req *http.Reques
 		})
 		return
 	}
+	tokenString, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Some problem with getting token",
+			Code:  401,
+		})
+		return
+	}
+	userID, err := auth.ValidateJWT(tokenString, cfg.SecretKey)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Not valid jwt",
+			Code:  401,
+		})
+		return
+	}
 
 	chirp, err := cfg.Queries.CreateChirp(req.Context(), database.CreateChirpParams{
 		ID:        uuid.New(),
 		Body:      params.Body,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		UserID:    params.UserId,
+		UserID:    userID,
 	})
 	if err != nil {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
@@ -188,6 +214,7 @@ func (cfg *ApiConfig) CreateChirpHandler(w http.ResponseWriter, req *http.Reques
 }
 
 func (cfg *ApiConfig) GetChirpsHandler(w http.ResponseWriter, req *http.Request) {
+
 	chirps, err := cfg.Queries.GetChirps(req.Context())
 	if err != nil {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
@@ -248,8 +275,14 @@ func (cfg *ApiConfig) GetChirpHandler(w http.ResponseWriter, req *http.Request) 
 
 func (cfg *ApiConfig) LoginHandler(w http.ResponseWriter, req *http.Request) {
 	type reqParams struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
+	}
+
+	type loginResponse struct {
+		database.User
+		Token string `json:"token"`
 	}
 
 	params := reqParams{}
@@ -274,9 +307,7 @@ func (cfg *ApiConfig) LoginHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	hash := user.Password
-
-	isPassword, err := auth.CheckPasswordHash(params.Password, hash)
+	isPassword, err := auth.CheckPasswordHash(params.Password, user.Password)
 	if err != nil {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
 			Error: err,
@@ -284,11 +315,27 @@ func (cfg *ApiConfig) LoginHandler(w http.ResponseWriter, req *http.Request) {
 			Code:  500,
 		})
 	}
-	user.Password = ""
+
 	if isPassword {
+		var tokenString string
+		if params.ExpiresInSeconds == 0 {
+			tokenString, err = auth.MakeJWT(user.ID, cfg.SecretKey, time.Duration(60*time.Minute))
+		} else {
+			tokenString, err = auth.MakeJWT(user.ID, cfg.SecretKey, time.Duration(params.ExpiresInSeconds)*time.Second)
+		}
+		if err != nil {
+			helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+				Error: err,
+				Msg:   "Some problem with making JWT",
+				Code:  500,
+			})
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
-		data, _ := json.Marshal(user)
+		data, _ := json.Marshal(loginResponse{
+			User:  user,
+			Token: tokenString,
+		})
 		w.Write(data)
 	} else {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
