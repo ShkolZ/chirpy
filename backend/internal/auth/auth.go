@@ -76,5 +76,4 @@ func MakeRefreshToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(data), nil
-
 }
