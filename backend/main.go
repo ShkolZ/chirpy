@@ -44,6 +44,8 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.LoggingMiddleware(apiCfg.CreateUserHandler))
 	mux.HandleFunc("POST /api/chirps", apiCfg.LoggingMiddleware(apiCfg.CreateChirpHandler))
 	mux.HandleFunc("POST /api/login", apiCfg.LoggingMiddleware(apiCfg.LoginHandler))
+	mux.HandleFunc("POST /api/refresh", apiCfg.LoggingMiddleware(apiCfg.RefreshTokenHandler))
+	mux.HandleFunc("POST /api/revoke", apiCfg.LoggingMiddleware(apiCfg.RevokeRefreshTokenHandler))
 
 	log.Println("Server is starting...")
 
