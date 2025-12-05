@@ -174,3 +174,34 @@ func (cfg *ApiConfig) GetChirpHandler(w http.ResponseWriter, req *http.Request) 
 	w.WriteHeader(200)
 	w.Write(data)
 }
+
+func (cfg *ApiConfig) DeleteChirpHandler(w http.ResponseWriter, req *http.Request) {
+	chirpID, err := uuid.Parse(req.PathValue("chirp_id"))
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "No id provided",
+			Code:  400,
+		})
+		return
+	}
+
+	token, _ := auth.GetBearerToken(req.Header)
+	userID, _ := auth.ValidateJWT(token, cfg.SecretKey)
+
+	err = cfg.Queries.DeleteChirpById(req.Context(), database.DeleteChirpByIdParams{
+		ID:     chirpID,
+		UserID: userID,
+	})
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldn't delete the user",
+			Code:  403,
+		})
+		return
+	}
+
+	w.WriteHeader(204)
+
+}

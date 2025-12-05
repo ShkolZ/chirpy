@@ -21,7 +21,7 @@ VALUES (
     $4,
     $5
 )
-RETURNING id, created_at, updated_at, email, password
+RETURNING id, created_at, updated_at, email, password, is_chirpy_red
 `
 
 type CreateUserParams struct {
@@ -47,12 +47,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.UpdatedAt,
 		&i.Email,
 		&i.Password,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, created_at, updated_at, email, password FROM users
+SELECT id, created_at, updated_at, email, password, is_chirpy_red FROM users
 WHERE email = $1
 `
 
@@ -65,6 +66,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.UpdatedAt,
 		&i.Email,
 		&i.Password,
+		&i.IsChirpyRed,
 	)
 	return i, err
 }
@@ -76,4 +78,43 @@ DELETE FROM users
 func (q *Queries) ResetUsers(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, resetUsers)
 	return err
+}
+
+const setChirpyRedTrue = `-- name: SetChirpyRedTrue :exec
+UPDATE users
+SET is_chirpy_red = true
+WHERE id = $1
+`
+
+func (q *Queries) SetChirpyRedTrue(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, setChirpyRedTrue, id)
+	return err
+}
+
+const updateCredentials = `-- name: UpdateCredentials :one
+UPDATE users
+SET email = $2,
+    password = $3
+WHERE id = $1
+RETURNING id, created_at, updated_at, email, password, is_chirpy_red
+`
+
+type UpdateCredentialsParams struct {
+	ID       uuid.UUID `json:"id"`
+	Email    string    `json:"email"`
+	Password string    `json:"-"`
+}
+
+func (q *Queries) UpdateCredentials(ctx context.Context, arg UpdateCredentialsParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateCredentials, arg.ID, arg.Email, arg.Password)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Email,
+		&i.Password,
+		&i.IsChirpyRed,
+	)
+	return i, err
 }

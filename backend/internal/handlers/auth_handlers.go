@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -64,6 +65,82 @@ func (cfg *ApiConfig) CreateUserHandler(w http.ResponseWriter, req *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
 	w.Write(data)
+}
+
+func (cfg *ApiConfig) UpdateCredentialsHandler(w http.ResponseWriter, req *http.Request) {
+	type reqParams struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "No token in the header",
+			Code:  401,
+		})
+		return
+	}
+
+	params := reqParams{}
+	decoder := json.NewDecoder(req.Body)
+	err = decoder.Decode(&params)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldnt decode",
+			Code:  401,
+		})
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.SecretKey)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldn't validate JWT",
+			Code:  401,
+		})
+		return
+	}
+
+	passHash, err := auth.HashPassword(params.Password)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldn't hash the password",
+			Code:  401,
+		})
+		return
+	}
+
+	user, err := cfg.Queries.UpdateCredentials(req.Context(), database.UpdateCredentialsParams{
+		ID:       userID,
+		Email:    params.Email,
+		Password: passHash,
+	})
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldn't update user credentials",
+			Code:  401,
+		})
+		return
+	}
+	data, err := json.Marshal(user)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Could marshal json",
+			Code:  401,
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(data)
+
 }
 
 func (cfg *ApiConfig) LoginHandler(w http.ResponseWriter, req *http.Request) {
@@ -226,4 +303,47 @@ func (cfg *ApiConfig) RevokeRefreshTokenHandler(w http.ResponseWriter, req *http
 	}
 	w.WriteHeader(204)
 	w.Write([]byte("OK"))
+}
+
+func (cfg *ApiConfig) UserChirpyRedHandler(w http.ResponseWriter, req *http.Request) {
+	type reqParams struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserId uuid.UUID `json:"user_id"`
+		} `json:"data"`
+	}
+
+	params := reqParams{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&params)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldn't decode",
+			Code:  500,
+		})
+		return
+	}
+
+	if params.Event != "user.upgrade" {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: fmt.Errorf("event not matching"),
+			Msg:   "Wrong event",
+			Code:  203,
+		})
+		return
+	}
+
+	err = cfg.Queries.SetChirpyRedTrue(req.Context(), params.Data.UserId)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Couldnt find a user",
+			Code:  404,
+		})
+		return
+	}
+
+	w.WriteHeader(204)
+
 }
