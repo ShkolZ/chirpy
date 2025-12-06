@@ -176,7 +176,7 @@ func (cfg *ApiConfig) GetChirpHandler(w http.ResponseWriter, req *http.Request) 
 }
 
 func (cfg *ApiConfig) DeleteChirpHandler(w http.ResponseWriter, req *http.Request) {
-	chirpID, err := uuid.Parse(req.PathValue("chirp_id"))
+	chirpID, err := uuid.Parse(req.PathValue("chirpID"))
 	if err != nil {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
 			Error: err,
@@ -203,5 +203,4 @@ func (cfg *ApiConfig) DeleteChirpHandler(w http.ResponseWriter, req *http.Reques
 	}
 
 	w.WriteHeader(204)
-
 }

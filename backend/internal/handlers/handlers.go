@@ -15,6 +15,7 @@ type ApiConfig struct {
 	FileserverHits atomic.Int32
 	Queries        *database.Queries
 	SecretKey      string
+	PolkaKey       string
 }
 
 func (cfg *ApiConfig) HealthzHandler(w http.ResponseWriter, req *http.Request) {

@@ -313,9 +313,27 @@ func (cfg *ApiConfig) UserChirpyRedHandler(w http.ResponseWriter, req *http.Requ
 		} `json:"data"`
 	}
 
+	apiKey, err := auth.GetApiKey(req.Header)
+	if err != nil {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: err,
+			Msg:   "Not Api key provided",
+			Code:  401,
+		})
+		return
+	}
+	if apiKey != cfg.PolkaKey {
+		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
+			Error: fmt.Errorf("wrong api key"),
+			Msg:   "Provided api key is not valid",
+			Code:  401,
+		})
+		return
+	}
+
 	params := reqParams{}
 	decoder := json.NewDecoder(req.Body)
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
 			Error: err,
@@ -329,7 +347,7 @@ func (cfg *ApiConfig) UserChirpyRedHandler(w http.ResponseWriter, req *http.Requ
 		helpers.RespondWithError(w, req, &helpers.ErrorResponse{
 			Error: fmt.Errorf("event not matching"),
 			Msg:   "Wrong event",
-			Code:  203,
+			Code:  400,
 		})
 		return
 	}
@@ -345,5 +363,4 @@ func (cfg *ApiConfig) UserChirpyRedHandler(w http.ResponseWriter, req *http.Requ
 	}
 
 	w.WriteHeader(204)
-
 }

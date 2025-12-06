@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -32,6 +33,14 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", errors.New("No token provided")
 	}
 	return tokenString, nil
+}
+
+func GetApiKey(headers http.Header) (string, error) {
+	apiKey := strings.Split(headers.Get("Authorization"), " ")[2]
+	if apiKey == "" {
+		return "", fmt.Errorf("No Api Key")
+	}
+	return apiKey, nil
 }
 
 func MakeJWT(userID uuid.UUID, tokenSecret string) (string, error) {

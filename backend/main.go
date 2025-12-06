@@ -17,6 +17,7 @@ func main() {
 	godotenv.Load("./../.env")
 	dbURL := os.Getenv("DB_URL")
 	secretKey := os.Getenv("SECRET_KEY")
+	polkaKey := os.Getenv("POLKA_KEY")
 	db, err := sql.Open("postgres", dbURL)
 	dbQueries := database.New(db)
 
@@ -29,6 +30,7 @@ func main() {
 		FileserverHits: atomic.Int32{},
 		Queries:        dbQueries,
 		SecretKey:      secretKey,
+		PolkaKey:       polkaKey,
 	}
 
 	//GET Requests
@@ -46,6 +48,12 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.LoggingMiddleware(apiCfg.LoginHandler))
 	mux.HandleFunc("POST /api/refresh", apiCfg.LoggingMiddleware(apiCfg.RefreshTokenHandler))
 	mux.HandleFunc("POST /api/revoke", apiCfg.LoggingMiddleware(apiCfg.RevokeRefreshTokenHandler))
+
+	//PUT REQUESTS
+	mux.HandleFunc("PUT /api/polka/webhooks", apiCfg.LoggingMiddleware(apiCfg.UserChirpyRedHandler))
+
+	//DELETE REQUESTS
+	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.LoggingMiddleware(apiCfg.DeleteChirpHandler))
 
 	log.Println("Server is starting...")
 
